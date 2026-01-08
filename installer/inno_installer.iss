@@ -59,14 +59,14 @@ Name: "ukrainian"; MessagesFile: "compiler:Languages\Ukrainian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "C:\Users\wesle\Documents\MeanByte Gaming\MeanByteHUB\ByHub\byhub\build\windows\x64\runner\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\wesle\Documents\MeanByte Gaming\MeanByteHUB\ByHub\byhub\build\windows\x64\runner\Release\byhub.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\wesle\Documents\MeanByte Gaming\MeanByteHUB\ByHub\byhub\build\windows\x64\runner\Release\flutter_secure_storage_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\wesle\Documents\MeanByte Gaming\MeanByteHUB\ByHub\byhub\build\windows\x64\runner\Release\flutter_windows.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\wesle\Documents\MeanByte Gaming\MeanByteHUB\ByHub\byhub\build\windows\x64\runner\Release\url_launcher_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\wesle\Documents\MeanByte Gaming\MeanByteHUB\ByHub\byhub\build\windows\x64\runner\Release\webview_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\wesle\Documents\MeanByte Gaming\MeanByteHUB\ByHub\byhub\build\windows\x64\runner\Release\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\wesle\Documents\MeanByte Gaming\MeanByteHUB\ByHub\byhub\build\windows\x64\runner\Release\data\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "C:\Users\<USER>\<DIR>\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\<USER>\<DIR>\byhub.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\<USER>\<DIR>\flutter_secure_storage_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\<USER>\<DIR>\flutter_windows.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\<USER>\<DIR>\url_launcher_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\<USER>\<DIR>\webview_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\<USER>\<DIR>\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\<USER>\<DIR>\Release\data\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Registry]
@@ -81,4 +81,5 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
 
