@@ -13,6 +13,8 @@ class ByhunAppModel {
   List<String> tags;
   String? sha256Hash;
   DateTime? lastUpdated;
+  bool isPrivate;
+  String? privateKeyHash; // SHA256 hash of the private key (not stored in plain text)
 
   ByhunAppModel({
     required this.id,
@@ -28,6 +30,8 @@ class ByhunAppModel {
     List<String>? tags,
     this.sha256Hash,
     this.lastUpdated,
+    this.isPrivate = false,
+    this.privateKeyHash,
   }) : tags = tags ?? [];
 
   // Copy with method for immutability
@@ -45,6 +49,8 @@ class ByhunAppModel {
     List<String>? tags,
     String? sha256Hash,
     DateTime? lastUpdated,
+    bool? isPrivate,
+    String? privateKeyHash,
   }) {
     return ByhunAppModel(
       id: id ?? this.id,
@@ -60,6 +66,8 @@ class ByhunAppModel {
       tags: tags ?? this.tags,
       sha256Hash: sha256Hash ?? this.sha256Hash,
       lastUpdated: lastUpdated ?? this.lastUpdated,
+      isPrivate: isPrivate ?? this.isPrivate,
+      privateKeyHash: privateKeyHash ?? this.privateKeyHash,
     );
   }
 
@@ -77,6 +85,8 @@ class ByhunAppModel {
         'tags': tags,
         'sha256Hash': sha256Hash,
         'lastUpdated': lastUpdated?.toIso8601String(),
+        'isPrivate': isPrivate,
+        'privateKeyHash': privateKeyHash,
       };
 
   factory ByhunAppModel.fromJson(Map<String, dynamic> json) => ByhunAppModel(
@@ -99,6 +109,8 @@ class ByhunAppModel {
         lastUpdated: json['lastUpdated'] != null
             ? DateTime.parse(json['lastUpdated'])
             : null,
+        isPrivate: json['isPrivate'] ?? false,
+        privateKeyHash: json['privateKeyHash'],
       );
 
   String get fileSizeFormatted {

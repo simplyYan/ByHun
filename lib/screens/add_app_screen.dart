@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +8,7 @@ import '../services/storage_service.dart';
 import '../services/encryption_service.dart';
 import '../services/validation_service.dart';
 import '../models/app_model.dart';
+import 'package:crypto/crypto.dart';
 
 // Add App Screen
 class AddAppScreen extends StatefulWidget {
@@ -125,6 +127,9 @@ class _AddAppScreenState extends State<AddAppScreen> {
       }
 
       // Try to decrypt and validate ZIP structure
+      // First, try without private key (for public apps)
+      String? privateKey;
+      bool isPrivate = false;
       try {
         final encryption = EncryptionService();
         final decryptedData = await encryption.decryptData(appData, id);
@@ -133,13 +138,43 @@ class _AddAppScreenState extends State<AddAppScreen> {
           throw Exception(zipValidation.error ?? 'Invalid ZIP structure');
         }
       } catch (e) {
-        throw Exception('File validation failed: $e. Please check the App ID.');
+        // If decryption fails, it might be a private app
+        // Check if the error indicates private key is required
+        if (e.toString().contains('private key is required')) {
+          isPrivate = true;
+          // Request private key from user
+          privateKey = await _requestPrivateKey(context);
+          if (privateKey == null || privateKey.isEmpty) {
+            throw Exception('Private key is required for this app');
+          }
+
+          // Try again with private key
+          try {
+            final encryption = EncryptionService();
+            final decryptedData = await encryption.decryptData(appData, id, privateKey: privateKey);
+            final zipValidation = ValidationService.validateDecryptedZip(decryptedData);
+            if (!zipValidation.isValid) {
+              throw Exception(zipValidation.error ?? 'Invalid ZIP structure');
+            }
+          } catch (e2) {
+            throw Exception('File validation failed: $e2. Please check the App ID and Private Key.');
+          }
+        } else {
+          throw Exception('File validation failed: $e. Please check the App ID.');
+        }
       }
 
       // Calculate file size and hash
       final fileSize = appData.length;
       await _storage.saveAppFile(id, appData);
       final hash = await _storage.calculateFileHash(id);
+
+      // Store private key securely if app is private
+      String? privateKeyHash;
+      if (isPrivate && privateKey != null) {
+        await PrivateKeyStorage.savePrivateKey(id, privateKey);
+        privateKeyHash = sha256.convert(utf8.encode(privateKey)).toString();
+      }
 
       // Parse tags
       final tags = _tagsController.text
@@ -159,6 +194,8 @@ class _AddAppScreenState extends State<AddAppScreen> {
         sha256Hash: hash,
         category: _selectedCategory,
         tags: tags,
+        isPrivate: isPrivate,
+        privateKeyHash: privateKeyHash,
       );
 
       await _storage.addApp(app);
@@ -473,8 +510,11 @@ class _AddAppScreenState extends State<AddAppScreen> {
             }
 
             // Try to decrypt and validate ZIP structure
-            final encryption = EncryptionService();
+            // First, try without private key (for public apps)
+            String? privateKey;
+            bool isPrivate = false;
             try {
+              final encryption = EncryptionService();
               final decryptedData = await encryption.decryptData(
                 fileData,
                 details['id']!,
@@ -487,9 +527,40 @@ class _AddAppScreenState extends State<AddAppScreen> {
                 );
               }
             } catch (e) {
-              throw Exception(
-                'File validation failed: $e. Please check the App ID.',
-              );
+              // If decryption fails, it might be a private app
+              if (e.toString().contains('private key is required')) {
+                isPrivate = true;
+                // Request private key from user
+                privateKey = await _requestPrivateKey(context);
+                if (privateKey == null || privateKey.isEmpty) {
+                  throw Exception('Private key is required for this app');
+                }
+
+                // Try again with private key
+                try {
+                  final encryption = EncryptionService();
+                  final decryptedData = await encryption.decryptData(
+                    fileData,
+                    details['id']!,
+                    privateKey: privateKey,
+                  );
+                  final zipValidation =
+                      ValidationService.validateDecryptedZip(decryptedData);
+                  if (!zipValidation.isValid) {
+                    throw Exception(
+                      zipValidation.error ?? 'Invalid ZIP structure',
+                    );
+                  }
+                } catch (e2) {
+                  throw Exception(
+                    'File validation failed: $e2. Please check the App ID and Private Key.',
+                  );
+                }
+              } else {
+                throw Exception(
+                  'File validation failed: $e. Please check the App ID.',
+                );
+              }
             }
 
             // Check if app already exists
@@ -503,6 +574,13 @@ class _AddAppScreenState extends State<AddAppScreen> {
 
             final fileSize = fileData.length;
             final hash = await _storage.calculateFileHash(details['id']!);
+
+            // Store private key securely if app is private
+            String? privateKeyHash;
+            if (isPrivate && privateKey != null) {
+              await PrivateKeyStorage.savePrivateKey(details['id']!, privateKey);
+              privateKeyHash = sha256.convert(utf8.encode(privateKey)).toString();
+            }
 
             // Parse tags
             final tags = _tagsController.text
@@ -521,6 +599,8 @@ class _AddAppScreenState extends State<AddAppScreen> {
               sha256Hash: hash,
               category: _selectedCategory,
               tags: tags,
+              isPrivate: isPrivate,
+              privateKeyHash: privateKeyHash,
             );
 
             await _storage.addApp(app);
@@ -560,5 +640,83 @@ class _AddAppScreenState extends State<AddAppScreen> {
         );
       }
     }
+  }
+
+  // Helper method to request private key from user
+  Future<String?> _requestPrivateKey(BuildContext context) async {
+    final privateKeyController = TextEditingController();
+    return await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.lock, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Private Key Required'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This is a private/commercial app that requires a private key to decrypt.',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: privateKeyController,
+                decoration: const InputDecoration(
+                  labelText: 'Private Key',
+                  prefixIcon: Icon(Icons.key),
+                  helperText:
+                      'Enter the private key provided by the app developer',
+                ),
+                obscureText: true,
+                autofocus: true,
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'The private key is required to decrypt and use this app. Contact the developer if you don\'t have it.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final key = privateKeyController.text.trim();
+              if (key.isNotEmpty) {
+                Navigator.pop(context, key);
+              }
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
   }
 }

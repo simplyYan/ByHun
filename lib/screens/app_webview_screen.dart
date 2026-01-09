@@ -49,10 +49,28 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
       // Load app file
       final appData = await _storage.loadAppFile(widget.app.id);
 
+      // Get private key if app is private
+      String? privateKey;
+      if (widget.app.isPrivate) {
+        privateKey = await PrivateKeyStorage.getPrivateKey(widget.app.id);
+        if (privateKey == null || privateKey.isEmpty) {
+          // Request private key from user
+          privateKey = await _requestPrivateKey();
+          if (privateKey == null || privateKey.isEmpty) {
+            throw Exception(
+              'Private key is required to run this app. Please provide the private key.',
+            );
+          }
+          // Save the key for future use
+          await PrivateKeyStorage.savePrivateKey(widget.app.id, privateKey);
+        }
+      }
+
       // Decrypt app
       final decryptedData = await _encryption.decryptData(
         appData,
         widget.app.id,
+        privateKey: privateKey,
       );
 
       // Extract to temp directory
@@ -141,7 +159,9 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
             onMessageReceived: (JavaScriptMessage message) async {
               if (_apiBridge != null) {
                 try {
-                  final response = await _apiBridge!.handleAPICall(message.message);
+                  final response = await _apiBridge!.handleAPICall(
+                    message.message,
+                  );
                   // Inject response back to JavaScript
                   await _androidController!.runJavaScript(
                     'window.postMessage(${jsonEncode(response)}, "*");',
@@ -241,6 +261,98 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
         ],
       ),
     );
+  }
+
+  // Helper method to request private key from user
+  Future<String?> _requestPrivateKey() async {
+    final privateKeyController = TextEditingController();
+    String? result;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.lock, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Private Key Required'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This is a private/commercial app that requires a private key to run.',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: privateKeyController,
+                decoration: const InputDecoration(
+                  labelText: 'Private Key',
+                  prefixIcon: Icon(Icons.key),
+                  helperText:
+                      'Enter the private key provided by the app developer',
+                ),
+                obscureText: true,
+                autofocus: true,
+                onSubmitted: (value) {
+                  if (value.isNotEmpty) {
+                    result = value;
+                    Navigator.pop(dialogContext);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'The private key will be saved securely for future use.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              result = null;
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final key = privateKeyController.text.trim();
+              if (key.isNotEmpty) {
+                result = key;
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    return result;
   }
 
   @override

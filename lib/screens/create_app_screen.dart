@@ -18,15 +18,18 @@ class _CreateAppScreenState extends State<CreateAppScreen> {
   final _nameController = TextEditingController();
   final _developerController = TextEditingController();
   final _idController = TextEditingController();
+  final _privateKeyController = TextEditingController();
   final EncryptionService _encryption = EncryptionService();
   String? _selectedZipPath;
   bool _isLoading = false;
+  bool _isPrivate = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     _developerController.dispose();
     _idController.dispose();
+    _privateKeyController.dispose();
     super.dispose();
   }
 
@@ -77,10 +80,23 @@ class _CreateAppScreenState extends State<CreateAppScreen> {
         throw Exception(validation.error ?? 'Invalid ZIP file structure');
       }
 
+      // Validate private key if app is private
+      String? privateKey;
+      if (_isPrivate) {
+        privateKey = _privateKeyController.text.trim();
+        if (privateKey.isEmpty) {
+          throw Exception('Private key is required for private/commercial apps');
+        }
+        if (privateKey.length < 8) {
+          throw Exception('Private key must be at least 8 characters long');
+        }
+      }
+
       // Encrypt the ZIP
       final encryptedData = await _encryption.encryptData(
         zipBytes,
         _idController.text.trim(),
+        privateKey: privateKey,
       );
 
       // Validate encrypted file structure
@@ -177,6 +193,111 @@ class _CreateAppScreenState extends State<CreateAppScreen> {
                   }
                   return null;
                 },
+              ),
+              const SizedBox(height: 16),
+              Card(
+                color: _isPrivate
+                    ? Theme.of(context).colorScheme.errorContainer.withOpacity(0.3)
+                    : null,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _isPrivate,
+                            onChanged: (value) {
+                              setState(() {
+                                _isPrivate = value ?? false;
+                                if (!_isPrivate) {
+                                  _privateKeyController.clear();
+                                }
+                              });
+                            },
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Private/Commercial App',
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                Text(
+                                  'Enable this for closed-source apps. Requires a private key that users must provide to decrypt.',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_isPrivate) ...[
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _privateKeyController,
+                          decoration: InputDecoration(
+                            labelText: 'Private Key',
+                            prefixIcon: const Icon(Icons.lock),
+                            helperText:
+                                'This key will be required to decrypt the app. Share it securely with authorized users only.',
+                            errorMaxLines: 3,
+                          ),
+                          obscureText: true,
+                          validator: (value) {
+                            if (_isPrivate) {
+                              if (value == null || value.isEmpty) {
+                                return 'Private key is required for private apps';
+                              }
+                              if (value.length < 8) {
+                                return 'Private key must be at least 8 characters';
+                              }
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .errorContainer
+                                .withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                color: Theme.of(context).colorScheme.error,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '⚠️ IMPORTANT: Save this private key securely! Users will need it to decrypt and use this app.',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(context).colorScheme.error,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               Card(

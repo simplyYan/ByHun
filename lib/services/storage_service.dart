@@ -6,6 +6,33 @@ import 'package:path_provider/path_provider.dart';
 import '../models/app_model.dart';
 import 'package:crypto/crypto.dart';
 
+// Private key storage - separate from app data for security
+class PrivateKeyStorage {
+  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+  static const String _keyPrefix = 'byhun_private_key_';
+
+  static Future<void> savePrivateKey(String appId, String privateKey) async {
+    // Store the private key securely
+    await _storage.write(
+      key: '$_keyPrefix$appId',
+      value: privateKey,
+    );
+  }
+
+  static Future<String?> getPrivateKey(String appId) async {
+    return await _storage.read(key: '$_keyPrefix$appId');
+  }
+
+  static Future<void> deletePrivateKey(String appId) async {
+    await _storage.delete(key: '$_keyPrefix$appId');
+  }
+
+  static Future<bool> hasPrivateKey(String appId) async {
+    final key = await getPrivateKey(appId);
+    return key != null && key.isNotEmpty;
+  }
+}
+
 // Storage Service
 class StorageService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -78,6 +105,13 @@ class StorageService {
       }
     } catch (e) {
       // Ignore file deletion errors
+    }
+
+    // Delete private key if exists
+    try {
+      await PrivateKeyStorage.deletePrivateKey(appId);
+    } catch (e) {
+      // Ignore key deletion errors
     }
   }
 

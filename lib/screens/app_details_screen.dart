@@ -498,6 +498,17 @@ class _AppDetailsScreenState extends State<AppDetailsScreen> {
                                     label: Text(_app.category),
                                   ),
                                 ],
+                                if (_app.isPrivate) ...[
+                                  const SizedBox(height: 8),
+                                  Chip(
+                                    avatar: const Icon(Icons.lock, size: 16),
+                                    label: const Text('Private/Commercial'),
+                                    backgroundColor: Theme.of(context)
+                                        .colorScheme
+                                        .errorContainer
+                                        .withOpacity(0.3),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -581,6 +592,14 @@ class _AppDetailsScreenState extends State<AppDetailsScreen> {
                             _app.source,
                             Icons.cloud,
                           ),
+                          if (_app.isPrivate) ...[
+                            const Divider(),
+                            _buildInfoRow(
+                              'App Type',
+                              'Private/Commercial',
+                              Icons.lock,
+                            ),
+                          ],
                           const Divider(),
                           _buildInfoRow(
                             'Usage Count',
