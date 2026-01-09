@@ -69,9 +69,7 @@ ByHun does not rely on a centralized server or account system.
 It provides:
 
 * Project templates
-* Live preview
 * App packaging tools
-* `.byhun` generation
 * Validation and build tooling
 
 ByHunIDE lowers the barrier for developers and ensures consistency across the ecosystem.
