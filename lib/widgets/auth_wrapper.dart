@@ -5,7 +5,14 @@ import '../screens/library_screen.dart';
 
 // Auth Wrapper
 class AuthWrapper extends StatefulWidget {
-  const AuthWrapper({super.key});
+  final Function(String)? onThemeChanged;
+  final String currentThemeMode;
+
+  const AuthWrapper({
+    super.key,
+    this.onThemeChanged,
+    this.currentThemeMode = 'system',
+  });
 
   @override
   State<AuthWrapper> createState() => _AuthWrapperState();
@@ -40,6 +47,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const AuthScreen();
     }
 
-    return const LibraryScreen();
+    return LibraryScreen(
+      onThemeChanged: widget.onThemeChanged,
+      currentThemeMode: widget.currentThemeMode,
+    );
   }
 }

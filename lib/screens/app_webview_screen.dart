@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:archive/archive.dart';
@@ -6,6 +7,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_windows/webview_windows.dart';
 import '../services/storage_service.dart';
 import '../services/encryption_service.dart';
+import '../services/developer_api_bridge.dart';
 import '../models/app_model.dart';
 
 // App WebView Screen - Platform-agnostic implementation
@@ -21,6 +23,7 @@ class AppWebViewScreen extends StatefulWidget {
 class _AppWebViewScreenState extends State<AppWebViewScreen> {
   final StorageService _storage = StorageService();
   final EncryptionService _encryption = EncryptionService();
+  DeveloperAPIBridge? _apiBridge;
 
   // Android: webview_flutter
   WebViewController? _androidController;
@@ -40,6 +43,9 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
 
   Future<void> _initializeApp() async {
     try {
+      // Mark app as used
+      await _storage.markAppAsUsed(widget.app.id);
+
       // Load app file
       final appData = await _storage.loadAppFile(widget.app.id);
 
@@ -123,9 +129,32 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
           }
         });
       } else {
-        // Android: Use webview_flutter
+        // Initialize API bridge
+        _apiBridge = DeveloperAPIBridge(widget.app.id);
+        final bridgeCode = await _apiBridge!.generateBridgeCode();
+
+        // Android: Use webview_flutter with JavaScript bridge
         _androidController = WebViewController()
           ..setJavaScriptMode(JavaScriptMode.unrestricted)
+          ..addJavaScriptChannel(
+            'byhunPostMessage',
+            onMessageReceived: (JavaScriptMessage message) async {
+              if (_apiBridge != null) {
+                try {
+                  final response = await _apiBridge!.handleAPICall(message.message);
+                  // Inject response back to JavaScript
+                  await _androidController!.runJavaScript(
+                    'window.postMessage(${jsonEncode(response)}, "*");',
+                  );
+                } catch (e) {
+                  // Send error response
+                  await _androidController!.runJavaScript(
+                    'window.postMessage(${jsonEncode({"type": "byhunAPIResponse", "success": false, "error": e.toString()})}, "*");',
+                  );
+                }
+              }
+            },
+          )
           ..setNavigationDelegate(
             NavigationDelegate(
               onPageStarted: (String url) {
@@ -133,7 +162,11 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
                   setState(() => _isLoading = true);
                 }
               },
-              onPageFinished: (String url) {
+              onPageFinished: (String url) async {
+                // Inject bridge code after page loads
+                if (_apiBridge != null) {
+                  await _androidController!.runJavaScript(bridgeCode);
+                }
                 if (mounted) {
                   setState(() {
                     _isLoading = false;

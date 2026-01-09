@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/app_model.dart';
+import 'package:crypto/crypto.dart';
 
 // Storage Service
 class StorageService {
@@ -103,5 +104,136 @@ class StorageService {
       throw Exception('App file not found');
     }
     return await appFile.readAsBytes();
+  }
+
+  Future<int> getAppFileSize(String appId) async {
+    try {
+      final appsDir = await _getAppsDir();
+      final appFile = File('$appsDir/$appId.byhun');
+      if (await appFile.exists()) {
+        return await appFile.length();
+      }
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  Future<String> calculateFileHash(String appId) async {
+    try {
+      final data = await loadAppFile(appId);
+      final hash = sha256.convert(data);
+      return hash.toString();
+    } catch (e) {
+      throw Exception('Failed to calculate hash: $e');
+    }
+  }
+
+  Future<void> updateApp(ByhunAppModel updatedApp) async {
+    final apps = await getApps();
+    final index = apps.indexWhere((app) => app.id == updatedApp.id);
+    if (index != -1) {
+      apps[index] = updatedApp;
+      await saveApps(apps);
+    }
+  }
+
+  Future<void> markAppAsUsed(String appId) async {
+    final apps = await getApps();
+    final app = apps.firstWhere((app) => app.id == appId,
+        orElse: () => throw Exception('App not found'));
+    final updatedApp = app.copyWith(
+      lastUsedDate: DateTime.now(),
+      usageCount: app.usageCount + 1,
+    );
+    await updateApp(updatedApp);
+  }
+
+  Future<void> toggleFavorite(String appId) async {
+    final apps = await getApps();
+    final app = apps.firstWhere((app) => app.id == appId,
+        orElse: () => throw Exception('App not found'));
+    final updatedApp = app.copyWith(isFavorite: !app.isFavorite);
+    await updateApp(updatedApp);
+  }
+
+  Future<List<ByhunAppModel>> getFavoriteApps() async {
+    final apps = await getApps();
+    return apps.where((app) => app.isFavorite).toList();
+  }
+
+  Future<List<ByhunAppModel>> getAppsByCategory(String category) async {
+    final apps = await getApps();
+    return apps.where((app) => app.category == category).toList();
+  }
+
+  Future<List<String>> getAllCategories() async {
+    final apps = await getApps();
+    final categories = apps.map((app) => app.category).toSet().toList();
+    categories.sort();
+    return categories;
+  }
+
+  Future<List<String>> getAllTags() async {
+    final apps = await getApps();
+    final tags = <String>{};
+    for (final app in apps) {
+      tags.addAll(app.tags);
+    }
+    final tagList = tags.toList();
+    tagList.sort();
+    return tagList;
+  }
+
+  Future<Map<String, dynamic>> exportLibrary() async {
+    final apps = await getApps();
+    return {
+      'version': '1.0',
+      'exportDate': DateTime.now().toIso8601String(),
+      'apps': apps.map((app) => app.toJson()).toList(),
+    };
+  }
+
+  Future<void> importLibrary(Map<String, dynamic> data) async {
+    try {
+      final appsList = data['apps'] as List<dynamic>;
+      final importedApps = appsList
+          .map((json) => ByhunAppModel.fromJson(json))
+          .toList();
+
+      // Merge with existing apps (don't overwrite by default)
+      final existingApps = await getApps();
+      final existingIds = existingApps.map((app) => app.id).toSet();
+
+      for (final importedApp in importedApps) {
+        if (!existingIds.contains(importedApp.id)) {
+          existingApps.add(importedApp);
+        }
+      }
+
+      await saveApps(existingApps);
+    } catch (e) {
+      throw Exception('Failed to import library: $e');
+    }
+  }
+
+  Future<void> cleanupTempFiles() async {
+    try {
+      final tempDir = await _getTempDir();
+      final dir = Directory(tempDir);
+      if (await dir.exists()) {
+        await for (final entity in dir.list()) {
+          if (entity is Directory) {
+            try {
+              await entity.delete(recursive: true);
+            } catch (e) {
+              // Ignore errors for active extractions
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore cleanup errors
+    }
   }
 }

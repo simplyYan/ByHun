@@ -1,8 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:archive/archive.dart';
 import '../services/encryption_service.dart';
+import '../services/validation_service.dart';
 
 // Create App Screen (for developers)
 class CreateAppScreen extends StatefulWidget {
@@ -68,15 +69,12 @@ class _CreateAppScreenState extends State<CreateAppScreen> {
         throw Exception('Selected file does not exist');
       }
 
-      // Verify ZIP contains index.html
-      final zipBytes = await zipFile.readAsBytes();
-      final archive = ZipDecoder().decodeBytes(zipBytes);
-      final hasIndexHtml = archive.any(
-        (file) => file.name == 'index.html' || file.name == '/index.html',
-      );
-
-      if (!hasIndexHtml) {
-        throw Exception('ZIP file must contain an index.html file');
+      // Verify ZIP contains index.html and validate structure
+      final zipBytes = Uint8List.fromList(await zipFile.readAsBytes());
+      
+      final validation = ValidationService.validateDecryptedZip(zipBytes);
+      if (!validation.isValid) {
+        throw Exception(validation.error ?? 'Invalid ZIP file structure');
       }
 
       // Encrypt the ZIP
@@ -84,6 +82,15 @@ class _CreateAppScreenState extends State<CreateAppScreen> {
         zipBytes,
         _idController.text.trim(),
       );
+
+      // Validate encrypted file structure
+      final encryptedValidation = await ValidationService.validateByhunFile(
+        encryptedData,
+        _idController.text.trim(),
+      );
+      if (!encryptedValidation.isValid) {
+        throw Exception(encryptedValidation.error ?? 'Encryption validation failed');
+      }
 
       // Get save location
       final result = await FilePicker.platform.saveFile(

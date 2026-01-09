@@ -1,6 +1,11 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
 import '../services/storage_service.dart';
+import '../services/encryption_service.dart';
+import '../services/validation_service.dart';
 import '../models/app_model.dart';
 
 // Add App Screen
@@ -16,15 +21,37 @@ class _AddAppScreenState extends State<AddAppScreen> {
   final _nameController = TextEditingController();
   final _developerController = TextEditingController();
   final _idController = TextEditingController();
+  final _categoryController = TextEditingController();
+  final _tagsController = TextEditingController();
   String _selectedSource = 'Github';
+  String _selectedCategory = 'Uncategorized';
+  List<String> _availableCategories = [];
   final StorageService _storage = StorageService();
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final categories = await _storage.getAllCategories();
+    setState(() {
+      _availableCategories = categories;
+      if (_availableCategories.isNotEmpty) {
+        _selectedCategory = _availableCategories[0];
+      }
+    });
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
     _developerController.dispose();
     _idController.dispose();
+    _categoryController.dispose();
+    _tagsController.dispose();
     super.dispose();
   }
 
@@ -89,8 +116,37 @@ class _AddAppScreenState extends State<AddAppScreen> {
       }
 
       // Save app file
-      final appData = response.bodyBytes;
+      final appData = Uint8List.fromList(response.bodyBytes);
+      
+      // Validate file structure
+      final validation = await ValidationService.validateByhunFile(appData, id);
+      if (!validation.isValid) {
+        throw Exception(validation.error ?? 'Invalid .byhun file structure');
+      }
+
+      // Try to decrypt and validate ZIP structure
+      try {
+        final encryption = EncryptionService();
+        final decryptedData = await encryption.decryptData(appData, id);
+        final zipValidation = ValidationService.validateDecryptedZip(decryptedData);
+        if (!zipValidation.isValid) {
+          throw Exception(zipValidation.error ?? 'Invalid ZIP structure');
+        }
+      } catch (e) {
+        throw Exception('File validation failed: $e. Please check the App ID.');
+      }
+
+      // Calculate file size and hash
+      final fileSize = appData.length;
       await _storage.saveAppFile(id, appData);
+      final hash = await _storage.calculateFileHash(id);
+
+      // Parse tags
+      final tags = _tagsController.text
+          .split(',')
+          .map((tag) => tag.trim())
+          .where((tag) => tag.isNotEmpty)
+          .toList();
 
       // Create app model
       final app = ByhunAppModel(
@@ -99,6 +155,10 @@ class _AddAppScreenState extends State<AddAppScreen> {
         developer: developer,
         source: downloadUrl.contains('github') ? 'Github' : 'MeanByte',
         addedDate: DateTime.now(),
+        fileSizeBytes: fileSize,
+        sha256Hash: hash,
+        category: _selectedCategory,
+        tags: tags,
       );
 
       await _storage.addApp(app);
@@ -198,6 +258,106 @@ class _AddAppScreenState extends State<AddAppScreen> {
                   }
                 },
               ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _selectedCategory,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                  prefixIcon: Icon(Icons.category),
+                ),
+                items: [
+                  ..._availableCategories.map((cat) => DropdownMenuItem(
+                        value: cat,
+                        child: Text(cat),
+                      )),
+                  const DropdownMenuItem(
+                    value: 'Custom',
+                    child: Text('Custom...'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == 'Custom') {
+                    // Show custom category dialog
+                    showDialog(
+                      context: context,
+                      builder: (context) {
+                        final customController = TextEditingController();
+                        return AlertDialog(
+                          title: const Text('Custom Category'),
+                          content: TextField(
+                            controller: customController,
+                            decoration: const InputDecoration(
+                              hintText: 'Enter category name',
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                if (customController.text.isNotEmpty) {
+                                  setState(() {
+                                    _selectedCategory = customController.text.trim();
+                                  });
+                                  Navigator.pop(context);
+                                }
+                              },
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  } else if (value != null) {
+                    setState(() => _selectedCategory = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _tagsController,
+                decoration: const InputDecoration(
+                  labelText: 'Tags (comma-separated)',
+                  hintText: 'e.g., game, utility, productivity',
+                  prefixIcon: Icon(Icons.label),
+                  helperText: 'Separate multiple tags with commas',
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Divider(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'OR',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.grey,
+                          ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Divider(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _importByhunFile,
+                  icon: const Icon(Icons.file_upload),
+                  label: const Text('Import .byhun File'),
+                ),
+              ),
               const SizedBox(height: 32),
               SizedBox(
                 height: 50,
@@ -217,5 +377,188 @@ class _AddAppScreenState extends State<AddAppScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _importByhunFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['byhun'],
+        dialogTitle: 'Import .byhun File',
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        final fileData = Uint8List.fromList(await file.readAsBytes());
+
+        // Show dialog to get app details
+        final nameController = TextEditingController();
+        final developerController = TextEditingController();
+        final idController = TextEditingController();
+
+        final details = await showDialog<Map<String, String>>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Import .byhun File'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'App Name',
+                      prefixIcon: Icon(Icons.apps),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: developerController,
+                    decoration: const InputDecoration(
+                      labelText: 'Developer Name',
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: idController,
+                    decoration: const InputDecoration(
+                      labelText: 'App ID (Encryption Key)',
+                      prefixIcon: Icon(Icons.key),
+                      helperText:
+                          'Must match the encryption key used to create this file',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  if (nameController.text.isNotEmpty &&
+                      developerController.text.isNotEmpty &&
+                      idController.text.isNotEmpty) {
+                    Navigator.pop(
+                      context,
+                      {
+                        'name': nameController.text.trim(),
+                        'developer': developerController.text.trim(),
+                        'id': idController.text.trim(),
+                      },
+                    );
+                  }
+                },
+                child: const Text('Import'),
+              ),
+            ],
+          ),
+        );
+
+        if (details != null) {
+          setState(() => _isLoading = true);
+
+          try {
+            // Validate file structure
+            final validation = await ValidationService.validateByhunFile(
+              fileData,
+              details['id']!,
+            );
+
+            if (!validation.isValid) {
+              throw Exception(validation.error ?? 'Invalid file');
+            }
+
+            // Try to decrypt and validate ZIP structure
+            final encryption = EncryptionService();
+            try {
+              final decryptedData = await encryption.decryptData(
+                fileData,
+                details['id']!,
+              );
+              final zipValidation =
+                  ValidationService.validateDecryptedZip(decryptedData);
+              if (!zipValidation.isValid) {
+                throw Exception(
+                  zipValidation.error ?? 'Invalid ZIP structure',
+                );
+              }
+            } catch (e) {
+              throw Exception(
+                'File validation failed: $e. Please check the App ID.',
+              );
+            }
+
+            // Check if app already exists
+            final existingApps = await _storage.getApps();
+            if (existingApps.any((app) => app.id == details['id']!)) {
+              throw Exception('App with this ID already exists');
+            }
+
+            // Save file and add to library
+            await _storage.saveAppFile(details['id']!, fileData);
+
+            final fileSize = fileData.length;
+            final hash = await _storage.calculateFileHash(details['id']!);
+
+            // Parse tags
+            final tags = _tagsController.text
+                .split(',')
+                .map((tag) => tag.trim())
+                .where((tag) => tag.isNotEmpty)
+                .toList();
+
+            final app = ByhunAppModel(
+              id: details['id']!,
+              name: details['name']!,
+              developer: details['developer']!,
+              source: 'Local Import',
+              addedDate: DateTime.now(),
+              fileSizeBytes: fileSize,
+              sha256Hash: hash,
+              category: _selectedCategory,
+              tags: tags,
+            );
+
+            await _storage.addApp(app);
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('App imported successfully!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+              Navigator.pop(context, true);
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          } finally {
+            if (mounted) {
+              setState(() => _isLoading = false);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error importing file: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
