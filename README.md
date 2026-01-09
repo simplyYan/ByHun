@@ -32,6 +32,27 @@ ByHun is designed to be flexible, transparent, and future-proof.
   Open ecosystem designed to work seamlessly with **ByHunIDE**, the official IDE for building ByHun apps.
 
 ---
+## 🔽 Fast Download Page
+
+> https://byhun.gt.tc
+
+ByHun offers a lightweight official download page to make installation simple and accessible, especially for non-technical users.
+
+While GitHub Releases remain the primary source for developers and advanced users, this page exists to provide:
+
+1. One-click downloads
+
+2. Easy access in restricted environments
+
+3. A simple link to share with end users
+
+The page automatically detects the operating system and downloads the correct file:
+
+- Windows: ByHun_WindowsInstaller.exe
+
+- Android: ByHun.apk
+
+This page is a convenience layer only and does not replace GitHub or centralize distribution. All files can always be verified through the official repository.
 
 ## 🧠 How ByHun Works (Concept Overview)
 
