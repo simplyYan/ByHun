@@ -1,4 +1,4 @@
-# ByHun
+![ByHun](logo.png)
 
 **ByHun** is a decentralized, open-source app store for secure, cross-platform web applications.
 
