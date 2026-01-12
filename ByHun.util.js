@@ -114,7 +114,7 @@ const ByHun = (function () {
       <h2>${currentApp.name}</h2>
       <p><strong>Developer:</strong> ${currentApp.dev}</p>
       <p><strong>AppID:</strong> ${currentApp.appID}</p>
-      <p><strong>Source:</strong> <a href="${currentApp.source}" target="_blank">Download App</a></p>
+      <p><strong>AppID:</strong> ${currentApp.source}</p>
       <button onclick="window.open('https://byhun.gt.tc', '_blank')">Download ByHun</button>
       <button class="byhun-modal-close">Close</button>
     `;
