@@ -12,8 +12,8 @@ const ByHun = (function () {
     const toast = document.createElement("div");
     toast.className = "byhun-toast";
     toast.innerHTML = `
-      <span>${currentApp.name} está disponível na ByHun!</span>
-      <button class="byhun-toast-btn">Ver info</button>
+      <span>${currentApp.name} is now available on ByHun!</span>
+      <button class="byhun-toast-btn">View Info</button>
     `;
     document.body.appendChild(toast);
 
@@ -112,11 +112,11 @@ const ByHun = (function () {
     modal.className = "byhun-modal";
     modal.innerHTML = `
       <h2>${currentApp.name}</h2>
-      <p><strong>Desenvolvedor:</strong> ${currentApp.dev}</p>
+      <p><strong>Developer:</strong> ${currentApp.dev}</p>
       <p><strong>AppID:</strong> ${currentApp.appID}</p>
-      <p><strong>Fonte:</strong> <a href="${currentApp.source}" target="_blank">Baixar App</a></p>
-      <button onclick="window.open('https://byhun.gt.tc', '_blank')">Baixar ByHun</button>
-      <button class="byhun-modal-close">Fechar</button>
+      <p><strong>Source:</strong> <a href="${currentApp.source}" target="_blank">Download App</a></p>
+      <button onclick="window.open('https://byhun.gt.tc', '_blank')">Download ByHun</button>
+      <button class="byhun-modal-close">Close</button>
     `;
 
     overlay.appendChild(modal);
@@ -133,4 +133,3 @@ const ByHun = (function () {
 
   return { util };
 })();
-
